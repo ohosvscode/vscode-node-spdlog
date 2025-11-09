@@ -43,7 +43,7 @@ jobs:
       - name: Setup OpenHarmony SDK
         uses: openharmony-rs/setup-ohos-sdk@v0.2
         with:
-          version: 6.0
+          version: "6.0"
 
       - name: Configure OHOS toolchain environment
         run: |
