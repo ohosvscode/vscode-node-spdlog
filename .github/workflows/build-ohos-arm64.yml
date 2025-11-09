@@ -1,0 +1,87 @@
+name: build-ohos-arm64
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "binding.gyp"
+      - "package.json"
+      - ".github/workflows/build-ohos-arm64.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      TARGET_TRIPLE: aarch64-linux-ohos
+      BUILD_DIR: ${{ github.workspace }}/build
+      SDK_DOWNLOAD_DIR: ${{ runner.temp }}/ohos-sdk
+      OHOS_SDK_ROOT: ${{ runner.temp }}/ohos-sdk
+      OHOS_SYSROOT: ${{ runner.temp }}/ohos-sdk/native/sysroot
+      CC: clang
+      CXX: clang++
+      AR: llvm-ar
+      NM: llvm-nm
+      STRIP: llvm-strip
+      CFLAGS: --sysroot=${{ runner.temp }}/ohos-sdk/native/sysroot --target=aarch64-linux-ohos -fPIC
+      CXXFLAGS: --sysroot=${{ runner.temp }}/ohos-sdk/native/sysroot --target=aarch64-linux-ohos -fPIC -std=c++20
+      LDFLAGS: --sysroot=${{ runner.temp }}/ohos-sdk/native/sysroot --target=aarch64-linux-ohos -L${{ runner.temp }}/ohos-sdk/native/sysroot/usr/lib/aarch64-linux-ohos -lc++_shared -lunwind
+      npm_config_arch: arm64
+      npm_config_platform: linux
+      npm_config_target_arch: arm64
+      npm_config_target_platform: linux
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 python3-pip xz-utils curl
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          check-latest: true
+
+      - name: Setup OpenHarmony SDK
+        uses: openharmony-rs/setup-ohos-sdk@v0.2
+        with:
+          version: 6.0
+
+      - name: Add OHOS toolchain to PATH
+        run: echo "$OHOS_SDK_ROOT/native/llvm/bin" >> "$GITHUB_PATH"
+
+      - name: Verify SDK layout
+        run: |
+          ls -R "$OHOS_SDK_ROOT/native" | head -n 20
+
+      - name: Install npm dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Prepare gyp build
+        run: npx node-gyp configure --arch=arm64 -- -DOS=linux
+
+      - name: Build addon
+        run: npx node-gyp build --arch=arm64 -- -DOS=linux
+
+      - name: Inspect artifact
+        run: |
+          file "$BUILD_DIR/Release/spdlog.node"
+          ls -al "$BUILD_DIR/Release"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spdlog-ohos-arm64
+          path: |
+            build/Release/spdlog.node
+            build/config.gypi
+
